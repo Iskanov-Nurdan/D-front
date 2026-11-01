@@ -1,0 +1,564 @@
+@use 'variables';
+@use 'mixins';
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Заголовок страницы остаётся в DOM для a11y; на мобилке дублируется в шапке приложения */
+@include mixins.mobile {
+  .main-layout__content .ui-page-h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: var(--font-weight-text);
+  font-size: var(--font-text);
+  line-height: 1.55;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-width: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth), color var(--transition-smooth), transform var(--transition-fast);
+}
+
+/* Видимая подсветка фокуса при навигации с клавиатуры */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: var(--font-text);
+  font-weight: 400;
+  color: var(--color-text);
+  background: var(--input-bg);
+
+  &::placeholder {
+    color: var(--input-placeholder);
+    font-weight: 400;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--input-shadow-focus);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px !important;
+  }
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  transition: all 0.15s ease;
+
+  &:hover:not(:focus):not(:disabled) {
+    border-color: var(--input-border-hover);
+    background: var(--color-surface-secondary);
+  }
+
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: var(--input-shadow-focus);
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+}
+
+.form-label {
+  font-size: var(--input-label-size);
+  font-weight: var(--input-label-weight);
+  color: var(--input-label-color);
+  margin-bottom: var(--input-label-margin);
+  display: block;
+}
+
+textarea {
+  height: auto;
+  min-height: 80px;
+}
+
+.form-label-required {
+  color: var(--color-danger);
+  font-weight: 400;
+}
+
+.loading-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+
+  .loading-inline__spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: loading-spin 0.7s linear infinite;
+  }
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+// ── Единая система списков: карточные строки, аватары, бейджи, кнопки-контуры ──
+// Общий визуальный язык для всех списков в приложении (клиенты, сотрудники,
+// роли, виды спорта, тренеры и т.д.) — чтобы не дублировать один и тот же CSS
+// в каждой фиче отдельно.
+
+.ui-list {
+  &__table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    @include mixins.scrollbar;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 6px;
+    background: transparent;
+
+    th {
+      padding: 8px 16px 10px;
+      text-align: left;
+      vertical-align: middle;
+      font-weight: 500;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--color-bg);
+    }
+
+    td {
+      height: 68px;
+      padding: 8px 16px;
+      vertical-align: middle;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border);
+      color: var(--color-text);
+      font-size: 14px;
+      transition: background var(--transition-fast);
+    }
+
+    td:first-child {
+      border-left: 1px solid var(--color-border);
+      border-radius: 10px 0 0 10px;
+    }
+    td:last-child {
+      border-right: 1px solid var(--color-border);
+      border-radius: 0 10px 10px 0;
+    }
+
+    tbody tr:hover td {
+      background: var(--color-surface-secondary);
+    }
+  }
+
+  &__name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &__name-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__muted {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    white-space: nowrap;
+  }
+
+  &__skeleton-cell,
+  &__empty-cell {
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+}
+
+.ui-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: 1;
+
+  &--lg {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  &--icon {
+    background: var(--color-surface-secondary);
+    color: var(--color-text-secondary);
+  }
+}
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+
+  &--success { background: var(--color-success-soft); color: var(--color-success); }
+  &--danger  { background: var(--color-danger-soft); color: var(--color-danger); }
+  &--info    { background: var(--color-info-soft); color: var(--color-info); }
+  &--primary { background: var(--color-primary-soft); color: var(--color-primary); }
+  &--warning { background: var(--color-warning-soft); color: var(--color-warning); }
+}
+
+.ui-list-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--color-surface-secondary);
+    border-color: var(--color-text-muted);
+    color: var(--color-text);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  // Правка — синий, отдельно от фирменного красного (--primary), чтобы не путать с удалением
+  &--edit {
+    border-color: #2563eb;
+    color: #2563eb;
+    [data-theme='dark'] & { border-color: #60a5fa; color: #60a5fa; }
+    &:hover { background: rgba(37, 99, 235, 0.08); }
+  }
+
+  &--primary {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    &:hover { background: var(--color-primary-soft); }
+  }
+
+  &--danger {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    &:hover { background: var(--color-danger-soft); }
+  }
+
+  &--warning {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+    &:hover { background: var(--color-warning-soft); }
+  }
+
+  &--icon-only {
+    width: 30px;
+    padding: 0;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    &:hover { background: transparent; border-color: var(--color-border-strong); color: var(--color-text-secondary); }
+  }
+}
+
+// ── Единая система табов: подчёркивание снизу, с горизонтальным скроллом ──
+.ui-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  @include mixins.page-tabs-row;
+
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+
+    &:hover {
+      color: var(--color-text);
+    }
+
+    &--active {
+      color: var(--color-primary);
+      font-weight: 500;
+      border-bottom-color: var(--color-primary);
+    }
+  }
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 20px;
+    background: var(--color-surface-secondary);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  &__tab--active &__badge,
+  &__badge--active {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+  }
+}
+
+// ── Единое поле поиска: иконка-лупа слева, стандартные размеры инпута ──
+.ui-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+  flex: 1 1 auto;
+
+  &__icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    pointer-events: none;
+    display: flex;
+  }
+
+  &__input {
+    width: 100%;
+    padding-left: 38px !important;
+  }
+}
+
+// ── Единая система кнопок в футере модалок (Отмена/Сохранить/Удалить) ──
+.ui-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    background: var(--color-surface-secondary);
+    border-color: var(--color-text-muted);
+  }
+
+  &--primary {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    &:hover { background: var(--color-primary-hover); }
+  }
+
+  &--danger {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    &:hover { background: var(--color-danger-soft); }
+  }
+
+  &--warning {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+    &:hover { background: var(--color-warning-soft); }
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    &:hover { background: transparent; border-color: var(--color-border); }
+  }
+
+  @include mixins.mobile {
+    min-height: 44px;
+  }
+}
+
+.access-denied-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-toast);
+}
+
+.access-denied-box {
+  background: var(--color-surface);
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  min-width: 280px;
+  text-align: center;
+}
+
+.access-denied-text {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.access-denied-btn {
+  padding: 10px 18px;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  &:hover {
+    background: var(--color-primary-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-modal__backdrop,
+  .confirm-modal,
+  .filters-modal__backdrop,
+  .filters-modal,
+  .select__sheet-backdrop,
+  .select__sheet {
+    animation: none !important;
+  }
+}

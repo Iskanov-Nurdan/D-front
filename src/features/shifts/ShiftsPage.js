@@ -1,0 +1,1145 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Clock, Plus, Banknote, CreditCard, TrendingUp, TrendingDown, Coins, ImagePlus, X as XIcon, Camera, FileText, Pencil, History, Maximize2, Images, Trash2, PieChart, Users, CalendarX2, CircleCheck, TriangleAlert, MoreVertical } from 'lucide-react';
+import { useAuth } from '../../app/providers/AuthProvider';
+import { useToast } from '../../app/providers/ToastProvider';
+import { fetchShifts, closeShift, updateShift, deleteShift, fetchShiftSummary, fetchPhotoReports, addPhotoReport, deletePhotoReport } from './api';
+import { fetchShiftHistory } from './attendanceApi';
+import { Select, Spinner, EmptyState, ErrorState, ConfirmModal, Pagination, PrimaryTabs, PeriodFilter, Fab, ActionSheet, FormModal } from '../../shared/ui';
+import { STATS_YEARS, MONTHS, formatMoney } from '../../shared/constants/common';
+import { getApiErrorMessage } from '../../shared/lib/apiError';
+import './ShiftsPage.scss';
+
+const NOW = new Date();
+const CURRENT_YEAR_STR = String(NOW.getFullYear());
+const DEFAULT_YEAR = STATS_YEARS.includes(CURRENT_YEAR_STR) ? CURRENT_YEAR_STR : STATS_YEARS[STATS_YEARS.length - 1];
+const DEFAULT_MONTH = String(NOW.getMonth() + 1);
+const DEFAULT_DAY = String(NOW.getDate());
+
+/**
+ * Запись сделана сегодня?
+ *
+ * Сравниваем по местному календарю (клуб в UTC+6): у toISOString() вечерние
+ * смены уезжают на следующую дату, и кнопка удаления пропадала бы раньше,
+ * чем бэкенд перестаёт её принимать.
+ */
+const isCreatedToday = (iso) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
+};
+
+const formatDate = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    + ' · ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+};
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+};
+
+const AVATAR_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#6366f1'];
+const getAvatarColor = (name) => {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+// ── Модалка: добавить фото ────────────────────────────────────
+const AddPhotoModal = ({ open, onClose, onSubmit }) => {
+  const [photos, setPhotos] = useState([]); // { file, preview }
+  const [desc, setDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFiles = (files) => {
+    const newPhotos = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      name: file.name,
+    }));
+    setPhotos((prev) => [...prev, ...newPhotos].slice(0, 10));
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  };
+
+  const removePhoto = (idx) => {
+    setPhotos((prev) => {
+      URL.revokeObjectURL(prev[idx].preview);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (saving || (photos.length === 0 && !desc.trim())) return;
+    setSaving(true);
+    try {
+      await onSubmit({ photos, description: desc.trim() });
+      photos.forEach((p) => URL.revokeObjectURL(p.preview));
+      setPhotos([]);
+      setDesc('');
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => {
+    photos.forEach((p) => URL.revokeObjectURL(p.preview));
+    setPhotos([]);
+    setDesc('');
+  };
+
+  if (!open) return null;
+
+  return (
+    <FormModal icon={Camera} eyebrow="Смены" title="Добавить фото" onClose={() => { reset(); onClose(); }} size="sheet">
+      <form className="form-modal__form" onSubmit={handleSubmit}>
+        <div className="form-modal__body">
+          <div
+            className={`shift-modal__drop-zone ${photos.length > 0 ? 'shift-modal__drop-zone--has-photos' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <span className="shift-modal__drop-icon-wrap">
+              <ImagePlus size={20} className="shift-modal__drop-icon" />
+            </span>
+            <span className="shift-modal__drop-text">
+              {photos.length > 0 ? `Добавить ещё · уже ${photos.length}` : 'Нажмите или перетащите фото'}
+            </span>
+            <span className="shift-modal__drop-hint">JPG, PNG · до 10 фото</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="shift-modal__file-input"
+              onChange={(e) => e.target.files.length && handleFiles(e.target.files)}
+            />
+          </div>
+
+          {photos.length > 0 && (
+            <div className="shift-modal__photos">
+              {photos.map((p, i) => (
+                <div key={i} className="shift-modal__photo-thumb">
+                  <img src={p.preview} alt={p.name} className="shift-modal__photo-img" />
+                  <button type="button" className="shift-modal__photo-remove" onClick={() => removePhoto(i)}>
+                    <XIcon size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label className="shift-modal__field">
+            <span className="shift-modal__label"><FileText size={14} /> Описание</span>
+            <textarea
+              className="shift-modal__textarea"
+              placeholder="Например: чек за оплату МБанк, итог дня…"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              rows={3}
+            />
+          </label>
+        </div>
+
+        <div className="form-modal__actions">
+          <button type="button" className="ui-modal-btn" onClick={() => { reset(); onClose(); }} disabled={saving}>
+            Отмена
+          </button>
+          <button type="submit" className="ui-modal-btn ui-modal-btn--primary" disabled={saving || (photos.length === 0 && !desc.trim())}>
+            {saving ? 'Отправка…' : 'Отправить'}
+          </button>
+        </div>
+      </form>
+    </FormModal>
+  );
+};
+
+// ── Модалка: завершить / изменить смену ───────────────────────
+// initial !== null → режим правки уже закрытой смены (поля предзаполнены).
+const CloseShiftModal = ({ open, onClose, onSubmit, initial = null, title = 'Завершить смену', submitLabel = 'Завершить смену' }) => {
+  const [cash, setCash]             = useState(initial ? String(initial.cash ?? '') : '');
+  const [card, setCard]             = useState(initial ? String(initial.card ?? '') : '');
+  const [expense, setExpense]       = useState(initial ? String(initial.expense ?? '') : '');
+  const [advance, setAdvance]       = useState(initial ? String(initial.advance ?? '') : '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState('');
+
+  const total = (Number(cash) || 0) + (Number(card) || 0);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSubmit({
+        cash:        Number(cash)    || 0,
+        card:        Number(card)    || 0,
+        expense:     Number(expense) || 0,
+        advance:     Number(advance) || 0,
+        total,
+        description: description.trim(),
+      });
+      if (!initial) {
+        setCash(''); setCard(''); setExpense(''); setAdvance(''); setDescription('');
+      }
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.error?.message ?? err?.message ?? 'Не удалось сохранить. Попробуйте ещё раз.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <FormModal icon={Clock} eyebrow="Смены" title={title} onClose={onClose} error={error} size="sheet">
+      <form className="form-modal__form" onSubmit={handleSubmit}>
+        <div className="form-modal__body">
+          <div className="shift-modal__row">
+            <label className="shift-modal__field">
+              <span className="shift-modal__label"><Banknote size={13} /> Наличка</span>
+              <div className="shift-modal__input-wrap">
+                <input type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={cash}
+                  onChange={(e) => setCash(e.target.value)} className="shift-modal__input" autoFocus />
+                <span className="shift-modal__currency">сом</span>
+              </div>
+            </label>
+
+            <label className="shift-modal__field">
+              <span className="shift-modal__label"><CreditCard size={13} /> Карта</span>
+              <div className="shift-modal__input-wrap">
+                <input type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={card}
+                  onChange={(e) => setCard(e.target.value)} className="shift-modal__input" />
+                <span className="shift-modal__currency">сом</span>
+              </div>
+            </label>
+          </div>
+
+          <div className="shift-modal__row">
+            <label className="shift-modal__field">
+              <span className="shift-modal__label shift-modal__label--muted"><TrendingDown size={13} /> Расход</span>
+              <div className="shift-modal__input-wrap shift-modal__input-wrap--sub">
+                <input type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={expense}
+                  onChange={(e) => setExpense(e.target.value)} className="shift-modal__input shift-modal__input--sub" />
+                <span className="shift-modal__currency">сом</span>
+              </div>
+            </label>
+
+            <label className="shift-modal__field">
+              <span className="shift-modal__label shift-modal__label--muted"><Coins size={13} /> Аванс</span>
+              <div className="shift-modal__input-wrap shift-modal__input-wrap--sub">
+                <input type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={advance}
+                  onChange={(e) => setAdvance(e.target.value)} className="shift-modal__input shift-modal__input--sub" />
+                <span className="shift-modal__currency">сом</span>
+              </div>
+            </label>
+          </div>
+
+          <label className="shift-modal__field">
+            <span className="shift-modal__label shift-modal__label--muted"><FileText size={13} /> Описание</span>
+            <textarea
+              className="shift-modal__textarea"
+              placeholder="Комментарий к смене (необязательно)"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </label>
+
+          <div className="shift-modal__total-block">
+            <div className="shift-modal__total">
+              <span className="shift-modal__total-label"><TrendingUp size={15} /> Общий итог</span>
+              <span className="shift-modal__total-value">{formatMoney(total)}</span>
+            </div>
+            {(Number(advance) > 0 || Number(expense) > 0) && (
+              <div className="shift-modal__total-subs">
+                {Number(advance) > 0 && (
+                  <div className="shift-modal__total-sub">
+                    <span className="shift-modal__total-sub-label"><Coins size={13} /> Аванс</span>
+                    <span className="shift-modal__total-sub-value">{formatMoney(Number(advance))}</span>
+                  </div>
+                )}
+                {Number(expense) > 0 && (
+                  <div className="shift-modal__total-sub">
+                    <span className="shift-modal__total-sub-label"><TrendingDown size={13} /> Расход</span>
+                    <span className="shift-modal__total-sub-value">{formatMoney(Number(expense))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="form-modal__actions">
+          <button type="button" className="ui-modal-btn" onClick={onClose} disabled={saving}>
+            Отмена
+          </button>
+          <button type="submit" className="ui-modal-btn ui-modal-btn--primary" disabled={saving}>
+            {saving ? 'Сохранение…' : submitLabel}
+          </button>
+        </div>
+      </form>
+    </FormModal>
+  );
+};
+
+// ── Лайтбокс (blur-preview → full load) ──────────────────────
+const LightboxViewer = ({ lightbox, onClose }) => {
+  const [src, setSrc] = useState(lightbox.thumbUrl);
+  const [loading, setLoading] = useState(lightbox.url !== lightbox.thumbUrl);
+
+  useEffect(() => {
+    if (lightbox.url === lightbox.thumbUrl) return;
+    const img = new window.Image();
+    img.onload = () => {
+      setSrc(lightbox.url);
+      setLoading(false);
+    };
+    img.src = lightbox.url;
+    return () => { img.onload = null; };
+  }, [lightbox.url, lightbox.thumbUrl]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="shifts-lightbox" onClick={onClose}>
+      <button
+        type="button"
+        className="shifts-lightbox__close"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+      >
+        <XIcon size={20} />
+      </button>
+      <img
+        src={src}
+        alt=""
+        className={`shifts-lightbox__img${loading ? ' shifts-lightbox__img--preview' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      />
+      {loading && (
+        <div className="shifts-lightbox__spinner">
+          <div className="shifts-lightbox__spinner-ring" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Главная страница ──────────────────────────────────────────
+// «Итоги» — рядом с остальными вкладками у всех, кому вообще открыт раздел
+// «Смены» (доступ page-level, см. ProtectedRoute pageId="shifts") — отдельного
+// права на эту вкладку больше нет (было в предыдущей версии продукта, сейчас
+// не нужно). Короткие подписи — на мобиле нет места для «Завершение смены»
+// целиком, а общий Subtabs всё равно скроллится горизонтально, если что-то
+// не влезло, поэтому длинные подписи не обрезаются никогда.
+// shortLabel — версия для мобилки: полная «Завершение смены»/«История смен»
+// при 4 вкладках в PrimaryTabs обрезалась бы («…ение смены»).
+const TABS = [
+  { id: 'photos', label: 'Отчёты', shortLabel: 'Отчёты', icon: Camera },
+  { id: 'shifts', label: 'Завершение смены', shortLabel: 'Закрыть', icon: Clock },
+  { id: 'summary', label: 'Итоги', shortLabel: 'Итоги', icon: PieChart },
+  // Приход/уход (кто когда начал/закончил смену по времени) — отдельная
+  // сущность от денежной «Завершение смены», см. attendanceApi.js.
+  { id: 'history', label: 'История смен', shortLabel: 'История', icon: History },
+];
+
+const ATTENDANCE_STATUS_LABEL = { open: 'Идёт', paused: 'На паузе', closed: 'Завершена' };
+
+const ShiftsPage = () => {
+  const { isAdmin } = useAuth();
+  const toast = useToast();
+  const [activeTab, setActiveTab] = useState('photos');
+
+  const [shifts, setShifts] = useState([]);
+  const [shiftsMeta, setShiftsMeta] = useState(null);
+  const [photoReports, setPhotoReports] = useState([]);
+  const [photosMeta, setPhotosMeta] = useState(null);
+  // Сервер отдаёт по 20 записей; без этих номеров страница показывала только
+  // первую двадцатку из сотни, и остальное было не достать
+  const [shiftsPage, setShiftsPage] = useState(1);
+  const [photosPage, setPhotosPage] = useState(1);
+  const [shiftsLoading, setShiftsLoading] = useState(true);
+  const [photosLoading, setPhotosLoading] = useState(true);
+  const [shiftsError, setShiftsError] = useState(null);
+  const [photosError, setPhotosError] = useState(null);
+
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [editingShift, setEditingShift] = useState(null);
+  const [openHistoryId, setOpenHistoryId] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
+  const [photoMenuRow, setPhotoMenuRow] = useState(null);
+  const [shiftMenuRow, setShiftMenuRow] = useState(null);
+
+  // Что удаляем: { kind: 'shift' | 'photo', id, label }. Удаление финансовой
+  // записи и фотоотчёта необратимо, поэтому всегда через подтверждение.
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  // Фильтры для отчётов
+  const [pYear, setPYear] = useState(DEFAULT_YEAR);
+  const [pMonth, setPMonth] = useState(DEFAULT_MONTH);
+  const [pDay, setPDay] = useState(DEFAULT_DAY);
+
+  // Фильтры для смен
+  const [sYear, setSYear] = useState(DEFAULT_YEAR);
+  const [sMonth, setSMonth] = useState(DEFAULT_MONTH);
+  const [sDay, setSDay] = useState('');
+
+  // Фильтры и данные для «Итогов». День по умолчанию пуст (не как у смен) —
+  // это по сути месячная сводка, и «пропущенные дни» вообще не считаются,
+  // если день зафиксирован (см. бэкенд).
+  const [gYear, setGYear] = useState(DEFAULT_YEAR);
+  const [gMonth, setGMonth] = useState(DEFAULT_MONTH);
+  const [gDay, setGDay] = useState('');
+  const [gEmployeeId, setGEmployeeId] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState(null);
+
+  // Фильтры и данные для «Истории смен» (приход/уход, отдельно от денег).
+  const [hYear, setHYear] = useState(DEFAULT_YEAR);
+  const [hMonth, setHMonth] = useState(DEFAULT_MONTH);
+  const [hDay, setHDay] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [history, setHistory] = useState([]);
+  const [historyMeta, setHistoryMeta] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(null);
+
+  const photosControllerRef = useRef(null);
+  const photosRequestSeq = useRef(0);
+  const loadPhotos = useCallback(async () => {
+    photosControllerRef.current?.abort();
+    photosControllerRef.current = new AbortController();
+    const { signal } = photosControllerRef.current;
+    const seq = ++photosRequestSeq.current;
+    setPhotosLoading(true);
+    setPhotosError(null);
+    try {
+      const { items, meta } = await fetchPhotoReports(
+        { year: pYear, month: pMonth, day: pDay || undefined, page: photosPage }, signal,
+      );
+      if (photosRequestSeq.current !== seq) return;
+      setPhotoReports(items);
+      setPhotosMeta(meta);
+    } catch (err) {
+      if (err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
+      if (photosRequestSeq.current !== seq) return;
+      setPhotosError(getApiErrorMessage(err));
+    } finally {
+      if (photosRequestSeq.current === seq) setPhotosLoading(false);
+    }
+  }, [pYear, pMonth, pDay, photosPage]);
+
+  const shiftsControllerRef = useRef(null);
+  const shiftsRequestSeq = useRef(0);
+  const loadShifts = useCallback(async () => {
+    shiftsControllerRef.current?.abort();
+    shiftsControllerRef.current = new AbortController();
+    const { signal } = shiftsControllerRef.current;
+    const seq = ++shiftsRequestSeq.current;
+    setShiftsLoading(true);
+    setShiftsError(null);
+    try {
+      const { items, meta } = await fetchShifts(
+        { year: sYear, month: sMonth, day: sDay || undefined, page: shiftsPage }, signal,
+      );
+      if (shiftsRequestSeq.current !== seq) return;
+      setShifts(items);
+      setShiftsMeta(meta);
+    } catch (err) {
+      if (err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
+      if (shiftsRequestSeq.current !== seq) return;
+      setShiftsError(getApiErrorMessage(err));
+    } finally {
+      if (shiftsRequestSeq.current === seq) setShiftsLoading(false);
+    }
+  }, [sYear, sMonth, sDay, shiftsPage]);
+
+  const summaryControllerRef = useRef(null);
+  const summaryRequestSeq = useRef(0);
+  const loadSummary = useCallback(async () => {
+    summaryControllerRef.current?.abort();
+    summaryControllerRef.current = new AbortController();
+    const { signal } = summaryControllerRef.current;
+    const seq = ++summaryRequestSeq.current;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const data = await fetchShiftSummary(
+        { year: gYear, month: gMonth, day: gDay || undefined, employeeId: gEmployeeId || undefined }, signal,
+      );
+      if (summaryRequestSeq.current !== seq) return;
+      setSummary(data);
+    } catch (err) {
+      if (err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
+      if (summaryRequestSeq.current !== seq) return;
+      setSummaryError(getApiErrorMessage(err));
+    } finally {
+      if (summaryRequestSeq.current === seq) setSummaryLoading(false);
+    }
+  }, [gYear, gMonth, gDay, gEmployeeId]);
+
+  const historyControllerRef = useRef(null);
+  const historyRequestSeq = useRef(0);
+  const loadHistory = useCallback(async () => {
+    historyControllerRef.current?.abort();
+    historyControllerRef.current = new AbortController();
+    const { signal } = historyControllerRef.current;
+    const seq = ++historyRequestSeq.current;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const { items, meta } = await fetchShiftHistory(
+        { year: hYear, month: hMonth, day: hDay || undefined, page: historyPage }, signal,
+      );
+      if (historyRequestSeq.current !== seq) return;
+      setHistory(items);
+      setHistoryMeta(meta);
+    } catch (err) {
+      if (err.name === 'AbortError' || err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
+      if (historyRequestSeq.current !== seq) return;
+      setHistoryError(getApiErrorMessage(err));
+    } finally {
+      if (historyRequestSeq.current === seq) setHistoryLoading(false);
+    }
+  }, [hYear, hMonth, hDay, historyPage]);
+
+  useEffect(() => { loadPhotos(); }, [loadPhotos]);
+  useEffect(() => { loadShifts(); }, [loadShifts]);
+  // Загружаем «Итоги»/«Историю смен» только когда вкладку реально открыли —
+  // незачем тратить лишний запрос, пока пользователь смотрит другую вкладку.
+  useEffect(() => { if (activeTab === 'summary') loadSummary(); }, [activeTab, loadSummary]);
+  useEffect(() => { if (activeTab === 'history') loadHistory(); }, [activeTab, loadHistory]);
+
+  // Новый период — снова с первой страницы: иначе после фильтра, где страниц
+  // меньше, остаёшься на несуществующей и видишь пустой список
+  useEffect(() => { setPhotosPage(1); }, [pYear, pMonth, pDay]);
+  useEffect(() => { setShiftsPage(1); }, [sYear, sMonth, sDay]);
+  useEffect(() => { setHistoryPage(1); }, [hYear, hMonth, hDay]);
+
+  const handleCloseShift = async ({ cash, card, expense, advance, total, description }) => {
+    await closeShift({ cash, card, expense, advance, total, description });
+    await loadShifts();
+  };
+
+  const handleEditShift = async (payload) => {
+    await updateShift(editingShift.id, payload);
+    await loadShifts();
+  };
+
+  const handleAddPhoto = async ({ photos, description }) => {
+    await addPhotoReport({ photos, description });
+    await loadPhotos();
+  };
+
+  /**
+   * Удаление смены или фотоотчёта после подтверждения.
+   *
+   * Список перезагружаем с сервера, а не вычёркиваем запись локально: смена —
+   * финансовая запись, и лучше увидеть настоящее состояние базы, чем свою
+   * догадку о нём. Ошибку показываем на месте, список при этом не ломается.
+   */
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { kind, id } = pendingDelete;
+    try {
+      if (kind === 'shift') {
+        await deleteShift(id);
+        setPendingDelete(null);
+        // Удалили единственную запись на странице — отступаем назад, иначе
+        // останемся на опустевшей последней странице
+        if (shifts.length === 1 && shiftsPage > 1) setShiftsPage((n) => n - 1);
+        else await loadShifts();
+      } else {
+        await deletePhotoReport(id);
+        setPendingDelete(null);
+        if (photoReports.length === 1 && photosPage > 1) setPhotosPage((n) => n - 1);
+        else await loadPhotos();
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    }
+  };
+
+  // Счётчик — всего записей за период, а не сколько влезло на текущую
+  // страницу. Пропущенные дни видны прямо на табе «Итоги» — не нужно
+  // открывать вкладку, чтобы узнать, что там есть на что посмотреть.
+  const tabsWithBadges = TABS.map((t) => {
+    if (t.id === 'photos') return { ...t, badge: photosMeta?.total ?? photoReports.length };
+    if (t.id === 'shifts') return { ...t, badge: shiftsMeta?.total ?? shifts.length, badgeAlert: true };
+    if (t.id === 'summary') return { ...t, badge: summary?.coverage?.missingDays?.length ?? 0, badgeAlert: true };
+    return t;
+  });
+
+  const photosIsDefault = pYear === DEFAULT_YEAR && pMonth === DEFAULT_MONTH && pDay === DEFAULT_DAY;
+  const shiftsIsDefault = sYear === DEFAULT_YEAR && sMonth === DEFAULT_MONTH && sDay === '';
+  const summaryIsDefault = gYear === DEFAULT_YEAR && gMonth === DEFAULT_MONTH && gDay === '' && !gEmployeeId;
+  const historyIsDefault = hYear === DEFAULT_YEAR && hMonth === DEFAULT_MONTH && hDay === '';
+
+  const tabAction = {
+    photos: (
+      <button type="button" className="shifts-page__add-btn shifts-page__add-btn--photo" onClick={() => setPhotoModalOpen(true)}>
+        <ImagePlus size={16} /> Добавить фото
+      </button>
+    ),
+    shifts: (
+      <button type="button" className="shifts-page__add-btn shifts-page__add-btn--shift" onClick={() => setShiftModalOpen(true)}>
+        <Plus size={16} /> Завершить смену
+      </button>
+    ),
+  }[activeTab];
+
+  return (
+    <div className="shifts-page">
+
+      {/* ── Табы ─────────────────────────────────────────────── */}
+      <PrimaryTabs items={tabsWithBadges} activeId={activeTab} onChange={setActiveTab} action={tabAction} />
+
+      {/* ── Таб: Отчёты ──────────────────────────────────────── */}
+      {activeTab === 'photos' && (
+        <div className="shifts-tab-content">
+          <PeriodFilter
+            year={pYear} month={pMonth} day={pDay}
+            onYear={setPYear} onMonth={setPMonth} onDay={setPDay}
+            onReset={() => { setPYear(DEFAULT_YEAR); setPMonth(DEFAULT_MONTH); setPDay(DEFAULT_DAY); }}
+            isDefault={photosIsDefault}
+          />
+
+          {photosLoading ? (
+            <div className="shifts-page__loading"><Spinner /></div>
+          ) : photosError ? (
+            <ErrorState compact message={photosError} onRetry={loadPhotos} />
+          ) : photoReports.length === 0 ? (
+            <EmptyState compact message="Фото отчётов пока нет — добавьте первый снимок" />
+          ) : (
+            <div className="photo-reports">
+              {photoReports.map((r, idx) => (
+                <div key={r.id} className="photo-card" style={{ '--row-i': idx }}>
+                  <div className="photo-card__header">
+                    <div className="shift-card__avatar" style={{ background: getAvatarColor(r.employeeName), width: 36, height: 36, fontSize: 12.5 }}>
+                      {getInitials(r.employeeName)}
+                    </div>
+                    <div className="photo-card__who">
+                      <span className="photo-card__name">{r.employeeName}</span>
+                      <span className="photo-card__date">{formatDate(r.createdAt)}</span>
+                    </div>
+                    <div className="photo-card__head-actions">
+                      {(r.photos || []).length > 0 && (
+                        <span className="photo-card__count">
+                          <Images size={12} />
+                          {r.photos.length}
+                        </span>
+                      )}
+                      {/* Ошибочный отчёт раньше висел вечно: добавить фото
+                          можно было, убрать — нет. Удаление снимает и файлы.
+                          Единственное действие — своё «⋯», как и у остальных
+                          списков в проекте, а не голая кнопка в углу карточки. */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="shifts-card-menu-btn"
+                          aria-label="Действия"
+                          onClick={() => setPhotoMenuRow(r)}
+                        >
+                          <MoreVertical size={17} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {r.description && <p className="photo-card__desc">{r.description}</p>}
+                  <div className="photo-card__photos">
+                    {(r.photos || []).map((p, i) => {
+                      const thumbUrl = p.thumbnail_url || p.thumbnailUrl || p.url;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className="photo-card__thumb-btn"
+                          onClick={() => setLightbox({ url: p.url, thumbUrl })}
+                        >
+                          <img
+                            src={thumbUrl}
+                            alt={`Фото ${i + 1}`}
+                            className="photo-card__thumb"
+                            loading="lazy"
+                            decoding="async"
+                            onLoad={(e) => {
+                              e.currentTarget.classList.add('photo-card__thumb--loaded');
+                              e.currentTarget.closest('.photo-card__thumb-btn').classList.add('photo-card__thumb-btn--loaded');
+                            }}
+                          />
+                          <span className="photo-card__thumb-overlay">
+                            <Maximize2 size={15} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Pagination
+            meta={photosMeta}
+            currentPage={photosPage}
+            onPage={setPhotosPage}
+            loading={photosLoading}
+            entityLabel="отчётов"
+          />
+
+          <ActionSheet open={!!photoMenuRow} onClose={() => setPhotoMenuRow(null)} title={photoMenuRow?.employeeName}>
+            <button
+              type="button"
+              className="action-sheet__item action-sheet__item--danger"
+              onClick={() => {
+                const row = photoMenuRow;
+                setPhotoMenuRow(null);
+                setPendingDelete({ kind: 'photo', id: row.id, label: row.employeeName });
+              }}
+            >
+              <Trash2 size={17} /> Удалить фото-отчёт
+            </button>
+          </ActionSheet>
+        </div>
+      )}
+
+      {/* ── Таб: Завершение смены ─────────────────────────────── */}
+      {activeTab === 'shifts' && (
+        <div className="shifts-tab-content">
+          <PeriodFilter
+            year={sYear} month={sMonth} day={sDay}
+            onYear={setSYear} onMonth={setSMonth} onDay={setSDay}
+            onReset={() => { setSYear(DEFAULT_YEAR); setSMonth(DEFAULT_MONTH); setSDay(''); }}
+            isDefault={shiftsIsDefault}
+          />
+
+          {shiftsLoading ? (
+            <div className="shifts-page__loading"><Spinner /></div>
+          ) : shiftsError ? (
+            <ErrorState compact message={shiftsError} onRetry={loadShifts} />
+          ) : shifts.length === 0 ? (
+            <EmptyState compact message="Смен пока нет — закройте первую смену, чтобы она появилась здесь" />
+          ) : (
+            <div className="shifts-page__list">
+              {shifts.map((s, idx) => (
+                <div
+                  key={s.id}
+                  className={`shift-card${!s.isEdited ? ' shift-card--clickable' : ''}`}
+                  style={{ '--row-i': idx }}
+                  onClick={() => { if (!s.isEdited) setEditingShift(s); }}
+                >
+                  <div className="shift-card__left">
+                    <div className="shift-card__avatar" style={{ background: getAvatarColor(s.employeeName) }}>
+                      {getInitials(s.employeeName)}
+                    </div>
+                    <div className="shift-card__who">
+                      <span className="shift-card__name">{s.employeeName}</span>
+                      <span className="shift-card__date">{formatDate(s.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="shift-card__amounts">
+                    <div className="shift-card__amount">
+                      <span className="shift-card__amount-label"><Banknote size={13} /> Наличка</span>
+                      <span className="shift-card__amount-value shift-card__amount-value--cash">{formatMoney(s.cash)}</span>
+                    </div>
+                    <div className="shift-card__divider">+</div>
+                    <div className="shift-card__amount">
+                      <span className="shift-card__amount-label"><CreditCard size={13} /> Карта</span>
+                      <span className="shift-card__amount-value shift-card__amount-value--card">{formatMoney(s.card)}</span>
+                    </div>
+                    <div className="shift-card__divider">=</div>
+                    <div className="shift-card__amount shift-card__amount--total">
+                      <span className="shift-card__amount-label"><TrendingUp size={13} /> Итого</span>
+                      <span className="shift-card__amount-value shift-card__amount-value--total">{formatMoney(s.total)}</span>
+                    </div>
+                    {Number(s.advance) > 0 && (
+                      <>
+                        <div className="shift-card__divider">·</div>
+                        <div className="shift-card__amount">
+                          <span className="shift-card__amount-label"><Coins size={13} /> Аванс</span>
+                          <span className="shift-card__amount-value shift-card__amount-value--advance">{formatMoney(s.advance)}</span>
+                        </div>
+                      </>
+                    )}
+                    {Number(s.expense) > 0 && (
+                      <>
+                        <div className="shift-card__divider">·</div>
+                        <div className="shift-card__amount">
+                          <span className="shift-card__amount-label"><TrendingDown size={13} /> Расход</span>
+                          <span className="shift-card__amount-value shift-card__amount-value--expense">{formatMoney(s.expense)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Свой угловой блок — на мобиле карточка становится
+                      колонкой, и без обёртки бейдж/«⋯» оказались бы каждый
+                      на своей строке слева, а не единым узлом справа сверху. */}
+                  <div className="shift-card__corner">
+                    {s.isEdited && (
+                      <span className="shift-card__edited-badge">
+                        <History size={12} /> Изменено
+                      </span>
+                    )}
+                    {/* Единственный вход в действия строки — «⋯», как и у
+                        остальных списков в проекте, вместо ряда кнопок. */}
+                    <button
+                      type="button"
+                      className="shifts-card-menu-btn"
+                      aria-label="Действия"
+                      onClick={(e) => { e.stopPropagation(); setShiftMenuRow(s); }}
+                    >
+                      <MoreVertical size={17} />
+                    </button>
+                  </div>
+
+                  {s.description && (
+                    <p className="shift-card__desc">{s.description}</p>
+                  )}
+
+                  {openHistoryId === s.id && s.previous && (
+                    <div className="shift-card__prev">
+                      <span className="shift-card__prev-label">Было до изменения:</span>
+                      <div className="shift-card__prev-row">
+                        <span><Banknote size={12} /> {formatMoney(s.previous.cash)}</span>
+                        <span><CreditCard size={12} /> {formatMoney(s.previous.card)}</span>
+                        <span><TrendingUp size={12} /> {formatMoney(s.previous.total)}</span>
+                        {Number(s.previous.advance) > 0 && <span><Coins size={12} /> {formatMoney(s.previous.advance)}</span>}
+                        {Number(s.previous.expense) > 0 && <span><TrendingDown size={12} /> {formatMoney(s.previous.expense)}</span>}
+                      </div>
+                      {s.previous.description && (
+                        <p className="shift-card__prev-desc">{s.previous.description}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Pagination
+            meta={shiftsMeta}
+            currentPage={shiftsPage}
+            onPage={setShiftsPage}
+            loading={shiftsLoading}
+            entityLabel="смен"
+          />
+
+          <ActionSheet open={!!shiftMenuRow} onClose={() => setShiftMenuRow(null)} title={shiftMenuRow?.employeeName}>
+            {shiftMenuRow?.isEdited ? (
+              <button
+                type="button"
+                className="action-sheet__item"
+                onClick={() => {
+                  const row = shiftMenuRow;
+                  setShiftMenuRow(null);
+                  setOpenHistoryId((id) => (id === row.id ? null : row.id));
+                }}
+              >
+                <History size={17} /> {openHistoryId === shiftMenuRow?.id ? 'Скрыть исходные данные' : 'Показать исходные данные'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="action-sheet__item"
+                onClick={() => { const row = shiftMenuRow; setShiftMenuRow(null); setEditingShift(row); }}
+              >
+                <Pencil size={17} /> Изменить
+              </button>
+            )}
+            {/* Только смена за сегодня и только администратору — то же
+                правило, что и на сервере. Вчерашние отчёты задним числом
+                не переписываются. */}
+            {isAdmin && shiftMenuRow && isCreatedToday(shiftMenuRow.createdAt) && (
+              <button
+                type="button"
+                className="action-sheet__item action-sheet__item--danger action-sheet__item--divider"
+                onClick={() => {
+                  const row = shiftMenuRow;
+                  setShiftMenuRow(null);
+                  setPendingDelete({ kind: 'shift', id: row.id, label: `${row.employeeName} · ${formatMoney(row.total)}` });
+                }}
+              >
+                <Trash2 size={17} /> Удалить смену
+              </button>
+            )}
+          </ActionSheet>
+        </div>
+      )}
+
+      {/* ── Таб: Итоги ───────────────────────────────────────── */}
+      {activeTab === 'summary' && (
+        <div className="shifts-tab-content">
+          <PeriodFilter
+            year={gYear} month={gMonth} day={gDay}
+            onYear={setGYear} onMonth={setGMonth} onDay={setGDay}
+            onReset={() => { setGYear(DEFAULT_YEAR); setGMonth(DEFAULT_MONTH); setGDay(''); setGEmployeeId(''); }}
+            isDefault={summaryIsDefault}
+            extra={(
+              <label className="period-filter__field">
+                <span>Сотрудник</span>
+                <Select
+                  value={String(gEmployeeId ?? '')}
+                  onChange={setGEmployeeId}
+                  options={[
+                    { value: '', label: 'Все сотрудники' },
+                    ...(summary?.byEmployee ?? [])
+                      .filter((e) => e.employeeId != null)
+                      .map((e) => ({ value: String(e.employeeId), label: e.employeeName })),
+                  ]}
+                  placeholder="Все сотрудники"
+                />
+              </label>
+            )}
+          />
+
+          {summaryLoading ? (
+            <div className="shifts-page__loading"><Spinner /></div>
+          ) : summaryError ? (
+            <ErrorState compact message={summaryError} onRetry={loadSummary} />
+          ) : !summary || summary.totals.count === 0 ? (
+            <EmptyState compact message="За этот период смен ещё не закрывали — итогам пока неоткуда взяться" />
+          ) : (
+            <>
+              {/* Заголовочные цифры — единственное, что меняется от фильтра
+                  по сотруднику. count — не денежная цифра, поэтому со своим,
+                  нейтральным акцентом, а не одним из пяти денежных цветов. */}
+              <div className="shifts-kpis">
+                <div className="shifts-kpi shifts-kpi--total">
+                  <span className="shifts-kpi__icon"><TrendingUp size={16} /></span>
+                  <span className="shifts-kpi__label">Общий итог</span>
+                  <span className="shifts-kpi__value">{formatMoney(summary.totals.total)}</span>
+                </div>
+                <div className="shifts-kpi shifts-kpi--cash">
+                  <span className="shifts-kpi__icon"><Banknote size={16} /></span>
+                  <span className="shifts-kpi__label">Наличка</span>
+                  <span className="shifts-kpi__value">{formatMoney(summary.totals.cash)}</span>
+                </div>
+                <div className="shifts-kpi shifts-kpi--card">
+                  <span className="shifts-kpi__icon"><CreditCard size={16} /></span>
+                  <span className="shifts-kpi__label">Карта</span>
+                  <span className="shifts-kpi__value">{formatMoney(summary.totals.card)}</span>
+                </div>
+                <div className="shifts-kpi shifts-kpi--advance">
+                  <span className="shifts-kpi__icon"><Coins size={16} /></span>
+                  <span className="shifts-kpi__label">Аванс</span>
+                  <span className="shifts-kpi__value">{formatMoney(summary.totals.advance)}</span>
+                </div>
+                <div className="shifts-kpi shifts-kpi--expense">
+                  <span className="shifts-kpi__icon"><TrendingDown size={16} /></span>
+                  <span className="shifts-kpi__label">Расход</span>
+                  <span className="shifts-kpi__value">{formatMoney(summary.totals.expense)}</span>
+                </div>
+                <div className="shifts-kpi shifts-kpi--count">
+                  <span className="shifts-kpi__icon"><Clock size={16} /></span>
+                  <span className="shifts-kpi__label">Смен закрыто</span>
+                  <span className="shifts-kpi__value">{summary.totals.count}</span>
+                </div>
+              </div>
+
+              {/* По сотрудникам — всегда все, независимо от фильтра сверху:
+                  это сравнение, а не второй фильтр той же цифры. */}
+              {summary.byEmployee.length > 0 && (
+                <section className="shifts-section">
+                  <div className="shifts-section__head">
+                    <h3 className="shifts-section__title"><Users size={16} /> По сотрудникам</h3>
+                    <p className="shifts-section__sub">Доля в общем итоге за период</p>
+                  </div>
+                  <div className="shifts-by-employee">
+                    {summary.byEmployee.map((e) => {
+                      const share = summary.totals.total > 0 ? (e.total / summary.totals.total) * 100 : 0;
+                      const isFiltered = gEmployeeId && String(e.employeeId) === String(gEmployeeId);
+                      return (
+                        <div
+                          key={e.employeeId ?? 'none'}
+                          className={`shifts-by-employee__row${isFiltered ? ' shifts-by-employee__row--active' : ''}`}
+                        >
+                          <span className="shifts-by-employee__fill" style={{ width: `${share}%` }} aria-hidden />
+                          <span className="shift-card__avatar shifts-by-employee__avatar" style={{ background: getAvatarColor(e.employeeName) }}>
+                            {getInitials(e.employeeName)}
+                          </span>
+                          <span className="shifts-by-employee__name">
+                            {e.employeeName}
+                            <span className="shifts-by-employee__count">{e.count} {e.count === 1 ? 'смена' : 'смен'}</span>
+                          </span>
+                          <span className="shifts-by-employee__breakdown">
+                            <span className="shifts-by-employee__stat shifts-by-employee__stat--cash"><Banknote size={11} />{formatMoney(e.cash)}</span>
+                            <span className="shifts-by-employee__stat shifts-by-employee__stat--card"><CreditCard size={11} />{formatMoney(e.card)}</span>
+                            {e.advance > 0 && <span className="shifts-by-employee__stat shifts-by-employee__stat--advance"><Coins size={11} />{formatMoney(e.advance)}</span>}
+                            {e.expense > 0 && <span className="shifts-by-employee__stat shifts-by-employee__stat--expense"><TrendingDown size={11} />{formatMoney(e.expense)}</span>}
+                          </span>
+                          <span className="shifts-by-employee__total">{formatMoney(e.total)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* Пропущенные дни — только когда выбраны конкретные год и месяц
+                  без фиксированного дня (см. бэкенд: иначе coverage === null) */}
+              {summary.coverage && (
+                <section className={`shifts-coverage${summary.coverage.missingDays.length > 0 ? ' shifts-coverage--warn' : ' shifts-coverage--ok'}`}>
+                  <div className="shifts-coverage__head">
+                    <span className="shifts-coverage__icon">
+                      {summary.coverage.missingDays.length > 0 ? <TriangleAlert size={16} /> : <CircleCheck size={16} />}
+                    </span>
+                    <div>
+                      <h3 className="shifts-coverage__title">
+                        {summary.coverage.missingDays.length > 0
+                          ? `Пропущено дней: ${summary.coverage.missingDays.length}`
+                          : 'Пропусков нет'}
+                      </h3>
+                      <p className="shifts-coverage__sub">
+                        {MONTHS[Number(gMonth)]} {gYear} · проверено по {summary.coverage.checkedThrough} число
+                        {summary.coverage.checkedThrough < summary.coverage.daysInMonth && ' (месяц ещё не закончился)'}
+                        {' '}· воскресенья не считаются
+                      </p>
+                    </div>
+                  </div>
+                  {summary.coverage.missingDays.length > 0 && (
+                    <div className="shifts-coverage__chips">
+                      {summary.coverage.missingDays.map((d) => (
+                        <span key={d} className="shifts-coverage__chip">
+                          <CalendarX2 size={12} /> {d} {MONTHS[Number(gMonth)]?.toLowerCase()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Таб: История смен (приход/уход, отдельно от денег) ─── */}
+      {activeTab === 'history' && (
+        <div className="shifts-tab-content">
+          <PeriodFilter
+            year={hYear} month={hMonth} day={hDay}
+            onYear={setHYear} onMonth={setHMonth} onDay={setHDay}
+            onReset={() => { setHYear(DEFAULT_YEAR); setHMonth(DEFAULT_MONTH); setHDay(''); }}
+            isDefault={historyIsDefault}
+          />
+
+          {historyLoading ? (
+            <div className="shifts-page__loading"><Spinner /></div>
+          ) : historyError ? (
+            <ErrorState compact message={historyError} onRetry={loadHistory} />
+          ) : history.length === 0 ? (
+            <EmptyState compact message="За этот период никто не начинал смену" />
+          ) : (
+            <div className="shifts-page__list">
+              {history.map((h, idx) => (
+                <div key={h.id} className="shift-card" style={{ '--row-i': idx }}>
+                  <div className="shift-card__left">
+                    <div className="shift-card__avatar" style={{ background: getAvatarColor(h.user_name) }}>
+                      {getInitials(h.user_name)}
+                    </div>
+                    <div className="shift-card__who">
+                      <span className="shift-card__name">{h.user_name || '—'}</span>
+                      <span className="shift-card__date">Начал: {formatDate(h.opened_at)}</span>
+                    </div>
+                  </div>
+
+                  <div className="shift-card__amounts">
+                    <div className="shift-card__amount">
+                      <span className="shift-card__amount-label">
+                        {h.closed_at ? <CircleCheck size={13} /> : <Clock size={13} />}
+                        {h.closed_at ? 'Завершил' : 'Статус'}
+                      </span>
+                      <span className={`shifts-attendance-status${h.closed_at ? '' : ' shifts-attendance-status--open'}`}>
+                        {h.closed_at ? formatDate(h.closed_at) : (ATTENDANCE_STATUS_LABEL[h.status] || 'Идёт')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {h.comment && <p className="shift-card__desc">{h.comment}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Pagination
+            meta={historyMeta}
+            currentPage={historyPage}
+            onPage={setHistoryPage}
+            loading={historyLoading}
+            entityLabel="записей"
+          />
+        </div>
+      )}
+
+      {/* Главное действие вкладки — на мобиле FAB вместо кнопки в тулбаре;
+          у «Итогов» и «Истории смен» нет действия создания — там FAB нет. */}
+      {activeTab === 'photos' && <Fab onClick={() => setPhotoModalOpen(true)} label="Добавить фото" icon={ImagePlus} />}
+      {activeTab === 'shifts' && <Fab onClick={() => setShiftModalOpen(true)} label="Завершить смену" icon={Plus} />}
+
+      {/* Модалки */}
+      <AddPhotoModal open={photoModalOpen} onClose={() => setPhotoModalOpen(false)} onSubmit={handleAddPhoto} />
+      <CloseShiftModal open={shiftModalOpen} onClose={() => setShiftModalOpen(false)} onSubmit={handleCloseShift} />
+
+      {editingShift && (
+        <CloseShiftModal
+          key={editingShift.id}
+          open
+          initial={editingShift}
+          title="Изменить смену"
+          submitLabel="Сохранить изменения"
+          onClose={() => setEditingShift(null)}
+          onSubmit={handleEditShift}
+        />
+      )}
+
+      {/* Лайтбокс */}
+      {lightbox && (
+        <LightboxViewer lightbox={lightbox} onClose={() => setLightbox(null)} />
+      )}
+
+      {/* Подтверждение удаления */}
+      {pendingDelete && (
+        <ConfirmModal
+          danger
+          title={pendingDelete.kind === 'shift' ? 'Удалить смену?' : 'Удалить фото-отчёт?'}
+          message={
+            pendingDelete.kind === 'shift'
+              ? `${pendingDelete.label}. Запись исчезнет из истории и из отчётов — восстановить её будет нельзя.`
+              : `Отчёт ${pendingDelete.label}. Фотографии будут удалены с сервера безвозвратно.`
+          }
+          confirmText="Удалить"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
+    </div>
+  );
+};
+
+export default ShiftsPage;

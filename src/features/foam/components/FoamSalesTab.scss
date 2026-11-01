@@ -1,0 +1,150 @@
+@use '../../../shared/styles/mixins';
+
+.foam-sales {
+  // Фильтр периода — своя строка под вкладками, видна на всех экранах
+  // (как .sales-page__toolbar у вкладки профиля — тот же паттерн, тот же
+  // компонент PeriodFilter, не второй похожий-но-другой фильтр).
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+
+    @include mixins.mobile {
+      margin-bottom: 12px;
+    }
+  }
+
+  // «Продать» — главное действие вкладки, живёт в action-слоте ProductLineTabs
+  // (тот же класс-паттерн, что .sales-page__add у вкладки профиля).
+  &__add {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 40px;
+    padding: 0 16px;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13.5px;
+    font-weight: 600;
+    flex-shrink: 0;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+
+    &:active { transform: translateY(0) scale(0.98); }
+  }
+
+  @media (hover: hover) {
+    &__add:hover {
+      background: var(--color-primary-hover);
+      box-shadow: var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__table-wrap {
+    @include mixins.scrollbar;
+  }
+
+  &__amount {
+    font-weight: 600;
+  }
+
+  // Та же «пилюля с точкой», что .sales-list__status на вкладке профиля —
+  // раньше тут была отдельная бордер-плашка, тот же смысл выглядел иначе.
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: var(--color-surface-secondary);
+    color: var(--color-text-muted);
+
+    &--paid { background: var(--color-success-soft); color: var(--color-success); }
+    &--partial { background: var(--color-warning-soft); color: var(--color-warning); }
+    &--debt { background: var(--color-danger-soft); color: var(--color-danger); }
+  }
+
+  &__status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  // ── Mobile cards ──────────────────────────────────────────
+  &__cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    animation: foam-sales-row-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--row-i, 0) * 30ms);
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  }
+
+  &__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+  }
+
+  &__card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  &__card-sub {
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
+
+  &__card-meta {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+}
+
+@keyframes foam-sales-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

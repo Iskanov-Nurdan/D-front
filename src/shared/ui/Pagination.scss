@@ -1,0 +1,82 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+
+  @media (max-width: 374px) {
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+  }
+
+  &__btn {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    background: var(--color-surface);
+    border: 1px solid var(--input-border);
+    border-radius: var(--input-radius);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 374px) {
+      min-width: 32px;
+      height: 32px;
+      padding: 0 8px;
+      font-size: 13px;
+    }
+
+    &--active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+
+      &:hover:not(:disabled) {
+        background: var(--color-primary-hover);
+        border-color: var(--color-primary-hover);
+        color: #fff;
+      }
+    }
+  }
+
+  &__ellipsis {
+    padding: 0 4px;
+    font-size: 14px;
+    color: var(--color-text-muted);
+  }
+
+  &__info {
+    margin-left: var(--space-2);
+    font-size: 13px;
+    color: var(--color-text-muted);
+
+    // На узких экранах счётчик не помещается в один ряд с кнопками и утягивает
+    // за собой последнюю (стрелку «›») на отдельную строку — переносим его
+    // на свою строку сам, чтобы кнопки переносились единым блоком.
+    @media (max-width: 600px) {
+      width: 100%;
+      margin-left: 0;
+      margin-top: var(--space-2);
+      text-align: center;
+    }
+
+    @media (max-width: 374px) {
+      font-size: 12px;
+    }
+  }
+}

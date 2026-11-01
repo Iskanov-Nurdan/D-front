@@ -1,0 +1,41 @@
+.submit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+
+  @media (max-width: 768px) {
+    min-height: 44px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  &__spinner {
+    flex-shrink: 0;
+    animation: submit-button-spin 0.7s linear infinite;
+  }
+
+  &__text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.2;
+  }
+
+  &:disabled .submit-button__spinner {
+    opacity: 0.95;
+  }
+}
+
+@keyframes submit-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submit-button__spinner {
+    animation: none;
+  }
+}

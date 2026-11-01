@@ -1,0 +1,93 @@
+// Обёртка сама несёт рамку/фон поля — внутренний <input> должен быть
+// полностью «голым». Без !important тут не обойтись: у глобального
+// input:not([type=checkbox]):not([type=radio]) в shared/styles/index.scss
+// специфичность выше, чем у одного класса .phone-input__field, и он
+// перебивал border/radius/padding/height — обёртка рисовала свою рамку,
+// а <input> внутри рисовал вторую, поверх неё, отсюда «два блока рядом»
+// и потерянное на второй рамке место для цифр.
+.phone-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+  &:hover:not(:focus-within):not(&--disabled) {
+    border-color: var(--input-border-hover);
+    background: var(--color-surface-secondary);
+  }
+
+  &:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: var(--input-shadow-focus);
+  }
+
+  &--disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+  }
+}
+
+.phone-input__prefix {
+  flex-shrink: 0;
+  font-size: var(--font-text);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  user-select: none;
+  // Без рамки/фона и почти без отступа — это подпись перед цифрами,
+  // а не второе поле рядом с первым
+  margin-right: 4px;
+}
+
+.phone-input__field {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-text);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+
+  &::placeholder {
+    color: var(--input-placeholder);
+    font-weight: 400;
+  }
+
+  &:hover,
+  &:focus {
+    outline: none;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 16px !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+}

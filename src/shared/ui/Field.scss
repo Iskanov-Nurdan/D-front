@@ -1,0 +1,26 @@
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+
+  &:last-child { margin-bottom: 0; }
+
+  &__label {
+    font-size: var(--input-label-size);
+    font-weight: var(--input-label-weight);
+    color: var(--input-label-color);
+  }
+
+  &__hint {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-text-muted);
+
+    svg { flex-shrink: 0; opacity: 0.8; }
+  }
+}

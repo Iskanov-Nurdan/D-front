@@ -1,0 +1,390 @@
+// ── Каркас ────────────────────────────────────────────────────────────────
+// Десктоп: сплит-панель (тёмный визуал слева, форма справа) — не трогаем.
+// Планшет и телефон: пока сознательно упрощённый вариант — без фото и
+// герба, один сплошной тёмный фон и карточка входа по центру.
+.login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background-color: var(--color-bg);
+  overflow: hidden;
+
+  @media (max-width: 960px) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    min-height: 100svh;
+    background-color: #0d0f1a;
+  }
+}
+
+.login-page__visual {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  background-color: #0d0f1a;
+  background-image: linear-gradient(
+      165deg,
+      rgba(13, 15, 26, 0.52) 0%,
+      rgba(25, 36, 71, 0.58) 50%,
+      rgba(13, 15, 26, 0.68) 100%
+    ),
+    var(--login-page-bg);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+
+  @media (max-width: 960px) {
+    display: none;
+  }
+}
+
+.login-page__brand-logo {
+  display: block;
+  width: auto;
+  max-width: 280px;
+  height: auto;
+  margin: 0;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.35));
+}
+
+// ── Панель формы ──────────────────────────────────────────────────────────
+.login-page__form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100dvh;
+  width: 100%;
+  padding: 24px 32px;
+
+  @media (max-width: 960px) {
+    // Карточка ниже — компактная, по размеру своего контента, а не во
+    // весь остаток экрана: раньше flex: 1 у неё же растягивал её на всю
+    // высоту панели, и форма из трёх полей терялась где-то посередине
+    // огромного белого поля. Тёмный фон .login-page вокруг нёе — не
+    // случайная полоса, а часть композиции: карточка-остров на цветном
+    // фоне, тот же приём, что уже работает на десктопе.
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 28px 20px max(28px, env(safe-area-inset-bottom, 0px));
+    align-items: center;
+    // overflow-y: auto — подстраховка на альбомных телефонах с низким
+    // экраном: если контенту не хватит места, он проскроллится внутри
+    // панели, а не обрежется по краю
+    overflow-y: auto;
+    justify-content: center;
+  }
+}
+
+.login-page__card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border-radius: var(--radius-2xl);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--color-border);
+  transition: box-shadow var(--transition-smooth);
+  box-sizing: border-box;
+
+  @media (min-width: 961px) {
+    &:hover {
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(15, 23, 42, 0.04);
+    }
+  }
+
+  @media (max-width: 960px) {
+    max-width: 440px;
+    flex-shrink: 0;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    padding: 30px 26px;
+  }
+
+  &--success {
+    text-align: center;
+    padding: 28px 32px;
+
+    @media (max-width: 960px) {
+      padding: 40px 28px;
+      align-items: center;
+    }
+  }
+}
+
+.login-page__form-header {
+  margin-bottom: var(--space-8);
+
+  @media (max-width: 960px) {
+    margin-bottom: var(--space-6);
+  }
+}
+
+.login-page__form-title {
+  margin: 0 0 var(--space-2);
+  font-size: 24px;
+  font-weight: var(--font-weight-page-title);
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+
+  @media (max-width: 600px) {
+    font-size: 22px;
+  }
+}
+
+.login-page__form-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.login-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+.login-page__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px var(--space-4);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  animation: login-error-in 0.2s ease;
+
+  svg { flex-shrink: 0; margin-top: 1px; }
+}
+
+@keyframes login-error-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-page__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--input-label-size);
+  font-weight: var(--input-label-weight);
+  color: var(--input-label-color);
+}
+
+// ── Поля ввода: с иконкой слева, крупнее и заметнее в фокусе ─────────────
+.login-page__input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.login-page__input-icon {
+  position: absolute;
+  left: 14px;
+  // top: 50% + translateY — без этого абсолютно спозиционированная иконка
+  // не участвует в align-items родителя и прижимается к верхнему краю,
+  // из-за чего съезжала на текст плейсхолдера, а не стояла на одной
+  // высоте с ним. Именно это и выглядело как «всё сливается».
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  transition: color var(--transition-fast);
+}
+
+.login-page__input-wrap:focus-within .login-page__input-icon {
+  color: var(--color-primary);
+}
+
+.login-page__input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--input-border);
+  border-radius: var(--input-radius);
+  background: var(--input-bg);
+  font-size: 16px;
+  color: var(--color-text);
+  font-weight: 500;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+
+  @media (max-width: 768px) {
+    min-height: 48px;
+  }
+
+  // hover — только там, где есть настоящий курсор: на тач-экране после тапа
+  // состояние :hover «залипает» до следующего касания другого элемента
+  @media (hover: hover) {
+    &:hover:not(:focus):not(:disabled) {
+      border-color: var(--input-border-hover);
+    }
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--input-shadow-focus);
+  }
+
+  &::placeholder {
+    color: var(--input-placeholder);
+    font-weight: 400;
+  }
+
+  // !important — иначе глобальный сброс input:not([type=checkbox])... в
+  // shared/styles/index.scss (специфичность выше одного класса-модификатора)
+  // перебивает padding и снова прижимает текст поверх иконки. Та же
+  // причина, по которой раньше «съезжал» PhoneInput.
+  &--icon {
+    padding-left: 42px !important;
+  }
+
+  &--password {
+    padding-right: 44px !important;
+  }
+}
+
+.login-page__password-toggle {
+  position: absolute;
+  // 44×44 — тач-зона по гайдлайну, а не размер иконки (18px): раньше
+  // padding: 8px вокруг неё давал только 34×34, слишком мало для пальца
+  right: 0;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translateY(-50%);
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--color-text);
+      background: var(--color-surface-secondary);
+    }
+  }
+
+  &:active {
+    color: var(--color-text);
+    background: var(--color-surface-secondary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+}
+
+// ── Кнопка входа ──────────────────────────────────────────────────────────
+.login-page__submit {
+  width: 100%;
+  box-sizing: border-box;
+  height: 48px;
+  padding: 0 var(--space-4);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-top: var(--space-2);
+  box-shadow: 0 4px 16px rgba(197, 48, 48, 0.28);
+  transition: background var(--transition-fast), transform 0.1s ease, box-shadow var(--transition-fast);
+
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      background: var(--color-primary-hover);
+      box-shadow: 0 6px 20px rgba(197, 48, 48, 0.34);
+    }
+  }
+  &:active:not(:disabled) {
+    background: var(--color-primary-hover);
+    transform: scale(0.98);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  svg { transition: transform 0.15s ease; }
+  @media (hover: hover) {
+    &:hover:not(:disabled) svg { transform: translateX(2px); }
+  }
+}
+
+.login-page__submit-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.login-page__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: login-spin 0.7s linear infinite;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
+.login-page__success-icon {
+  color: var(--color-success);
+  margin: 0 auto var(--space-5);
+  animation: login-success-pop 0.4s ease-out;
+}
+
+@keyframes login-success-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.login-page__success-title {
+  margin: 0 0 var(--space-2);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.login-page__success-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page__error,
+  .login-page__success-icon { animation: none; }
+}

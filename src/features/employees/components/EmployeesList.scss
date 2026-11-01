@@ -1,0 +1,117 @@
+@use '../../../shared/styles/mixins';
+
+.employees-list {
+  // Аватар/название/бейдж роли/кнопки — общие .ui-avatar/.ui-list__title/.ui-pill/.ui-list-btn,
+  // см. shared/styles/index.scss. Тут только уникальное для сотрудников: виртуализация и мобильные карточки.
+  &__table-wrap {
+    @include mixins.scrollbar;
+
+    @include mixins.mobile {
+      overflow-x: hidden;
+    }
+  }
+
+  &__table tbody tr {
+    animation: employees-row-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--row-i, 0) * 30ms);
+  }
+
+  // ── Name cell (только в виртуальном режиме) ────────────────
+  &__cell--name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__empty-wrap {
+    padding: 32px 16px;
+    text-align: center;
+  }
+
+  // ── Mobile cards ──────────────────────────────────────────
+  &__cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  // Чистая карточка: аватар — имя+роль — «⋯». Тап по всей карточке = «Изменить»,
+  // «⋯» открывает ActionSheet с полным списком действий (см. EmployeesList.js).
+  &__card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 8px 12px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    animation: employees-row-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--row-i, 0) * 30ms);
+    transition: border-color 0.15s ease;
+
+    &:active {
+      border-color: var(--color-border-strong);
+    }
+  }
+
+  &__card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.25;
+    @include mixins.text-ellipsis;
+  }
+
+  // Длинное название роли («Планировщик производства и складского учёта»)
+  // иначе вылезает за правый край карточки — .ui-pill сам по себе не
+  // ограничен по ширине (в других местах пилюли всегда короткие ярлыки).
+  &__card-info .ui-pill {
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__card-menu-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--color-text-muted);
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:active {
+      background: var(--color-surface-secondary);
+      color: var(--color-text);
+    }
+  }
+}
+
+@keyframes employees-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+// Фото сотрудника вместо инициалов, когда оно есть (см. useTrainerPhotosByFio) —
+// .ui-avatar задаёт форму и размер, здесь только заполнение без искажений
+.employees-list__avatar-img {
+  object-fit: cover;
+  background: var(--color-surface-secondary);
+}

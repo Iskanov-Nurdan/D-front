@@ -1,0 +1,145 @@
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  @include flex-center;
+  z-index: var(--z-modal);
+  box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+
+@mixin modal-close-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 18px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+
+  &:hover {
+    background: var(--color-surface-secondary);
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+}
+
+@mixin text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/** Скрывает нативный скроллбар (кроссбраузерно), скролл остаётся рабочим —
+ * для горизонтальных рядов вкладок/чипов, где полоса прокрутки визуально
+ * лишняя (край размывается градиентом в самом компоненте вместо неё). */
+@mixin hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@mixin scrollbar {
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: var(--color-border);
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-text-muted);
+    border-radius: 4px;
+  }
+}
+
+@mixin scrollbar-sidebar {
+  &::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.24);
+    }
+  }
+}
+
+/** Горизонтальный ряд табов: без переноса, скролл внутри строки */
+@mixin page-tabs-row {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  @include scrollbar;
+}
+
+/* Breakpoints: xs 320, sm 480, md 768, lg 1024 */
+@mixin xs {
+  @media (max-width: 374px) {
+    @content;
+  }
+}
+
+@mixin sm {
+  @media (max-width: 479px) {
+    @content;
+  }
+}
+
+@mixin mobile {
+  @media (max-width: 768px) {
+    @content;
+  }
+}
+
+@mixin md {
+  @media (max-width: 768px) {
+    @content;
+  }
+}
+
+@mixin lg {
+  @media (max-width: 1023px) {
+    @content;
+  }
+}
+
+@mixin desktop-only {
+  @media (min-width: 769px) {
+    @content;
+  }
+}
+
+@mixin from-sm {
+  @media (min-width: 480px) {
+    @content;
+  }
+}
+
+@mixin from-md {
+  @media (min-width: 769px) {
+    @content;
+  }
+}

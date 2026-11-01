@@ -1,0 +1,151 @@
+@use '../../../shared/styles/mixins';
+
+// Каркас модалки (backdrop/шапка/fullscreen на мобиле/sticky-кнопки) — общий
+// .form-modal, см. shared/ui/FormModal.scss. Тут только ширина на десктопе
+// и стили полей формы.
+.form-modal.cfm {
+  max-width: 560px;
+}
+
+.cfm {
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--color-border);
+  }
+
+  &__section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+  }
+
+  &__row {
+    display: flex;
+    gap: 12px;
+
+    .cfm__field {
+      flex: 1;
+      min-width: 0;
+    }
+
+    @include mixins.mobile {
+      flex-direction: column;
+    }
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
+  &__label-icon {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__required {
+    color: var(--color-primary);
+    font-weight: 700;
+    margin-left: 1px;
+  }
+
+  &__field-error {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-danger);
+  }
+
+  &__input, &__textarea {
+    padding: 0 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--input-radius);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &::placeholder {
+      color: var(--color-text-muted);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: var(--input-shadow-focus);
+    }
+
+    &--invalid {
+      border-color: var(--color-danger) !important;
+      box-shadow: 0 0 0 3px var(--color-danger-soft) !important;
+    }
+  }
+
+  &__input {
+    height: 42px;
+
+    // 16px на мобиле — иначе iOS зумит страницу при фокусе на поле
+    @include mixins.mobile { font-size: 16px; }
+  }
+
+  // Режим лимита: два равных сегмента, как pay-modes в кассе
+  &__seg {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-secondary);
+
+    button {
+      flex: 1;
+      min-height: 40px;
+      border: none;
+      border-radius: calc(var(--radius-md) - 3px);
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+
+      &.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
+    }
+  }
+
+  &__textarea {
+    padding: 10px 14px;
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  &__select {
+    width: 100%;
+  }
+
+  @media (hover: hover) {
+    &__input:hover:not(:focus):not(:disabled),
+    &__textarea:hover:not(:focus):not(:disabled) {
+      border-color: var(--color-border-strong);
+    }
+  }
+}

@@ -1,0 +1,118 @@
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.toast-container > * {
+  pointer-events: auto;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  animation: toast-in 0.25s ease-out;
+}
+
+.toast.toast--exiting {
+  animation: toast-out 0.2s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.toast--success {
+  background: var(--color-success-soft);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: var(--color-success);
+}
+
+.toast--error {
+  background: var(--color-danger-soft);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: var(--color-danger);
+}
+
+.toast--info {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.toast__icon {
+  flex-shrink: 0;
+}
+
+.toast__message {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.toast__close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+// Кнопка действия в тосте («Отменить» у удаления)
+.toast__action {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover { background: rgba(255, 255, 255, 0.15); }
+}
